@@ -57,6 +57,16 @@ def _transform(lf: pl.LazyFrame, markets_long: pl.LazyFrame) -> pl.LazyFrame:
         how="left",
     )
 
+    # Fallback when the join misses: markets.csv is a snapshot of
+    # currently-listed markets, so historical trades against
+    # resolved/delisted markets get null market_id. Use the non-USDC token
+    # ID as the market identifier in that case — token1 and token2 of a
+    # binary market become separate virtual markets, which is fine for
+    # per-token FIFO PnL accounting (traders don't flip token1<->token2).
+    lf = lf.with_columns(
+        pl.coalesce([pl.col("market_id"), pl.col("nonusdc_asset_id")]).alias("market_id"),
+    )
+
     lf = lf.with_columns([
         pl.when(pl.col("makerAssetId") == "0").then(pl.lit("USDC"))
           .otherwise(pl.col("side")).alias("makerAsset"),
